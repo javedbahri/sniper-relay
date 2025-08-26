@@ -30,3 +30,6 @@ AUX*
 CON*
 COM[1-9]*
 LPT[1-9]*
+
+# Allow env template
+!.env.example
