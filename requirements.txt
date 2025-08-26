@@ -1,0 +1,8 @@
+fastapi
+uvicorn[standard]
+redis
+rq
+httpx
+python-dotenv
+ib-insync>=0.9.86
+

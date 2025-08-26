@@ -1,0 +1,63 @@
+version: "3.9"
+
+services:
+  redis:
+    image: redis:7-alpine
+    restart: unless-stopped
+    command: >
+      sh -c 'exec redis-server --requirepass "$${REDIS_PASSWORD}" --appendonly yes'
+    environment:
+      REDIS_PASSWORD: ${REDIS_PASSWORD:-realPass}
+    ports:
+      - "6379:6379"
+    volumes:
+      - redis-data:/data
+
+  app:
+    build: .
+    restart: unless-stopped
+    env_file: .env
+    environment:                 # add this block
+      IB_HOST: host.docker.internal
+      IB_PORT: "7496"
+      IB_CLIENT_ID: "102"
+    depends_on:
+      - redis
+    # Healthcheck so ngrok only starts after the app is up
+    healthcheck:
+      test: ["CMD", "curl", "-fsS", "http://localhost:8000/healthz"]
+      interval: 10s
+      timeout: 3s
+      retries: 10
+
+  worker:
+    build: .
+    restart: unless-stopped
+    env_file: .env
+    depends_on:
+      - redis
+    command: >
+      sh -c 'rq worker -u "$${REDIS_URL}" "$${RQ_QUEUE:-sniper}"'
+    # If you prefer your own worker entrypoint:
+    # command: ["python", "worker.py"]
+
+  ngrok:
+    image: ngrok/ngrok:latest
+    restart: unless-stopped
+    environment:
+      NGROK_AUTHTOKEN: ${NGROK_AUTHTOKEN}
+    depends_on:
+      app:
+        condition: service_healthy
+    command:
+      - "http"
+      - "--log=stdout"           # << add
+      - "--log-level=debug"      # << add
+      - "--domain=${NGROK_DOMAIN}"
+      # Optional extra auth:
+      # - "--basic-auth=${NGROK_BASIC_AUTH}"
+      - "app:8000"
+    # No ports needed; ngrok makes an outbound tunnel
+
+volumes:
+  redis-data:
